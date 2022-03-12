@@ -1,0 +1,54 @@
+name: Application Deploy
+
+on:
+  workflow_call:
+    inputs:
+      environment_name:
+        required: true
+        type: string
+      environment_url:
+        required: true
+        type: string
+      app_service_name:
+        required: true
+        type: string
+      slot_name:
+        required: false
+        type: string
+    secrets:
+      image_tags:
+        description: Tags required for docker image
+        required: true
+      AZURE_CREDENTIALS:
+        required: true
+      AZURE_GROUP:
+        required: true
+
+jobs:
+  deploy:
+    environment:
+      name: ${{ inputs.environment_name }}
+      url: ${{ inputs.environment_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+         
+      - name: Deploy to Azure Web App
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ inputs.app_service_name }}
+          slot-name: ${{ inputs.slot_name }}
+          images: ${{ secrets.image_tags }}
+
+      - name: Swap Slots
+        if: ${{ inputs.slot_name }}
+        id: slot_swap
+        run: |
+          az webapp deployment slot swap -g ${{ secrets.AZURE_GROUP }} -n ${{ inputs.app_service_name }} -s ${{ inputs.slot_name }}
+
+      - name: Azure logout
+        run: az logout

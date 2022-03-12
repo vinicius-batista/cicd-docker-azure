@@ -1,0 +1,59 @@
+name: CI/CD
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+
+env:
+  registry_name: ghactionscicd.azurecr.io
+  image_name: remix-app
+
+jobs:
+  parse_env:
+    runs-on: 'ubuntu-latest'
+    outputs:
+      registry_name: ${{ steps.parse.outputs.registry_name }}
+      image_name: ${{ steps.parse.outputs.image_name }}
+    steps:
+    - id: parse
+      shell: bash
+      run: |
+        echo "::set-output name=registry_name::$registry_name"
+        echo "::set-output name=image_name::$image_name"
+
+  build:
+    needs: parse_env
+    uses: ./.github/workflows/app-build.yml
+    with:
+      registry: ${{ needs.parse_env.outputs.registry_name }}
+    secrets:
+      image_tags: ${{ needs.parse_env.outputs.registry_name }}/${{ secrets.REGISTRY_USERNAME }}/${{ needs.parse_env.outputs.image_name }}:${{ github.sha }}
+      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+
+  deploy_dev:
+    needs: [build, parse_env]
+    uses: ./.github/workflows/compliant-deploy.yml
+    with:
+      environment_name: "Development"
+      environment_url: "https://gh-actions-ci-cd-dev.azurewebsites.net"
+      app_service_name: "gh-actions-ci-cd-dev"
+    secrets:
+      image_tags: ${{ needs.parse_env.outputs.registry_name }}/${{ secrets.REGISTRY_USERNAME }}/${{ needs.parse_env.outputs.image_name }}:${{ github.sha }}
+      AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+      AZURE_GROUP: ${{ secrets.AZURE_GROUP }}
+
+  deploy_prod:
+    needs: [deploy_homolog, parse_env]
+    uses: ./.github/workflows/compliant-deploy.yml
+    with:
+      environment_name: "Production"
+      environment_url: "https://gh-actions-ci-cd.azurewebsites.net"
+      app_service_name: "gh-actions-ci-cd"
+      slot_name: staging
+    secrets:
+      image_tags: ${{ needs.parse_env.outputs.registry_name }}/${{ secrets.REGISTRY_USERNAME }}/${{ needs.parse_env.outputs.image_name }}:${{ github.sha }}
+      AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+      AZURE_GROUP: ${{ secrets.AZURE_GROUP }}
