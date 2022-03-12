@@ -46,7 +46,7 @@ jobs:
       AZURE_GROUP: ${{ secrets.AZURE_GROUP }}
 
   deploy_prod:
-    needs: [deploy_homolog, parse_env]
+    needs: [deploy_dev, parse_env]
     uses: ./.github/workflows/deploy.yml
     with:
       environment_name: "Production"
